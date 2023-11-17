@@ -1,136 +1,111 @@
-﻿################################################################################################
-# This script can be used to check if your computer is compatible with Windows 11              #
-# Editor : Christopher Mogis                                                                   #
-# Date : 06/30/2022                                                                            #
-# Version 1.0                                                                                  #
-################################################################################################
+######################################################################
+# ChatGPT 3.5 improved 11-16-2023                                                                      #
+# Version: 1.2                                                                                   #
+############################################################################################################################################
+# This script checks if your computer is compatible with Windows 11                               #
+# Original Code: Christopher Mogis                                                                      #
+# Date: 06/30/2022                                                                                #
+# https://github.com/ChrisMogis/W11_PrerequisitesCkeck.ps1                                      #
+######################################################################
 
-#Variable
+# Variable
 $Information = "https://www.microsoft.com/en-US/windows/windows-11-specifications"
 
-#Architecture x64
+# Store failed checks in an array
+$FailedChecks = @()
+
+# Function to display error message and add to the failed checks array
+function DisplayError($message) {
+    $FailedChecks += $message
+    Write-Host "$message : Not OK" -ForegroundColor "red"
+}
+
+# Function to display success message
+function DisplaySuccess($message) {
+    Write-Host "$message : OK" -ForegroundColor "green"
+}
+
+# Architecture x64 check
 $Arch = (Get-CimInstance -Class CIM_ComputerSystem).SystemType
 $ArchValue = "x64-based PC"
-if ($Arch -ne $ArchValue)
-    #If Architecture is not OK
-    {
-    Write-Host "Architecture x64 : Not OK" -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
+if ($Arch -ne $ArchValue) {
+    DisplayError "Architecture x64"
+} else {
+    DisplaySuccess "Architecture x64"
+}
 
-else 
-
-    #If Architecture is OK
-    {
-    Write-Host "Architecture x64 : OK" -foregroundcolor "green"
-    }
-
-#Screen Resolution
+# Screen Resolution check
 $ScreenInfo = (Get-CimInstance -ClassName Win32_VideoController).CurrentVerticalResolution
-$ValueMin = 720 
-if ($ScreenInfo -le $ValueMin)
-    #If Screen resolution is not OK
-    {
-    Write-Host "Screen resolution support : Not OK" -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
+$MinResolution = 720
+if ($ScreenInfo -le $MinResolution) {
+    DisplayError "Screen resolution support"
+} else {
+    DisplaySuccess "Screen resolution support"
+}
 
-else 
-
-    #If Screen resolution is OK
-    {
-    Write-Host "Screen resolution support : OK" -foregroundcolor "green"
-    }
-    
-#CPU composition
-$Core = (Get-CimInstance -Class CIM_Processor | Select-Object *).NumberOfCores
+# CPU Composition check
+$Core = (Get-CimInstance -Class CIM_Processor | Select-Object -ExpandProperty NumberOfCores)
 $CoreValue = 2
-$Frequency = (Get-CimInstance -Class CIM_Processor | Select-Object *).MaxClockSpeed
+$Frequency = (Get-CimInstance -Class CIM_Processor | Select-Object -ExpandProperty MaxClockSpeed)
 $FrequencyValue = 1000
-if (($Core -ge $CoreValue) -and ($Frequency -ge $FrequencyValue))
-    {
-    Write-Host "Processor is compatible with Windows 11" -foregroundcolor "green"
+if ($Core -ge $CoreValue -and $Frequency -ge $FrequencyValue) {
+    DisplaySuccess "Processor is compatible with Windows 11"
+} else {
+    DisplayError "Processor is compatible with Windows 11"
+}
+
+# TPM check
+$TPM2 = (Get-Tpm).ManufacturerVersionFull20 -notcontains "not supported"
+if (-not $TPM2) {
+    DisplayError "TPM module"
+} else {
+    DisplaySuccess "TPM module"
+}
+
+# Secure Boot check
+$SecureBootSupported = $null
+try {
+    $SecureBootSupported = Confirm-SecureBootUEFI -ErrorAction Stop
+} catch {
+    # Confirm-SecureBootUEFI is not supported, handle accordingly
+}
+
+if ($SecureBootSupported -ne $null) {
+    if (-not $SecureBootSupported) {
+        DisplayError "Secure boot"
+    } else {
+        DisplaySuccess "Secure boot"
     }
+} else {
+    Write-Host "Secure boot check is not supported on this platform." -ForegroundColor "yellow"
+}
 
-else
-
-    {
-    write-host "Processor is not compatible with Windows 11" -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
-
-#TPM
-if ((Get-Tpm).ManufacturerVersionFull20) 
-    {
-    $TPM2 = -not (Get-Tpm).ManufacturerVersionFull20.Contains(“not supported”)
-    }
-
-if ($TPM2 -contains $False)
-    #If TPM is not compatible 
-    {
-    write-host "TPM module is not compatible with Windows 11." -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
-
-else 
-
-    #If TPM is compatible
-    {
-    write-host "TPM module is compatible with Windows 11." -foregroundcolor "green"
-    }
-
-#Secure boot available and activated
-$SecureBoot = Confirm-SecureBootUEFI
-if ($SecureBoot -ne $True)
-    #If Secure Boot is not OK
-    {
-    Write-Host "Secure boot : Not OK" -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
-
-else 
-
-    #If Secure Boot is OK
-    {
-    Write-Host "Secure boot : OK" -foregroundcolor "green"
-    }
-
-#RAM available
+# RAM check
 $Memory = (Get-CimInstance -Class CIM_ComputerSystem).TotalPhysicalMemory
-$SetMinMemory = 4294967296
-if ($Memory -lt $SetMinMemory)
-    #If RAM is not OK
-    {
-    Write-Host "RAM installed : Not OK" -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
+$MinMemory = 4GB
+if ($Memory -lt $MinMemory) {
+    DisplayError "RAM installed"
+} else {
+    DisplaySuccess "RAM installed"
+}
 
-else 
+# Storage check
+$ListDisk = Get-CimInstance -Class Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 }
+$MinSizeLimit = 64GB
+foreach ($Disk in $ListDisk) {
+    $DiskFreeSpace = ($Disk.FreeSpace / 1GB).ToString('F2')
+}
 
-    #If RAM is OK
-    {
-    Write-Host "RAM installed : OK" -foregroundcolor "green"
-    }
+if ($DiskFreeSpace -lt $MinSizeLimit) {
+    DisplayError "Available space on Hard drive"
+} else {
+    DisplaySuccess "Available space on Hard drive"
+}
 
-#Storage available
-$ListDisk = Get-CimInstance -Class Win32_LogicalDisk | where {$_.DriveType -eq "3"}
-$SetMinSizeLimit = 64GB;
-    #Scan Free Hard Drive Space
-foreach($Disk in $ListDisk)
-    {
-   $DiskFreeSpace = ($Disk.freespace/1GB).ToString('F2')
-    }
-
-    #If free space is not OK
-if ($disk.FreeSpace -lt $SetMinSizeLimit)
-    {
-    Write-Host "Available space on Hard drive : Not OK" -foregroundcolor "red"
-    Write-Host "Please you can see this site for more informations : $Information"
-    }
-
-else 
-
-    #If the free space disk is OK
-    {
-    Write-Host "Available space on Hard drive : OK" -foregroundcolor "green"
-    }
+# Display the result and information message at the end
+if ($FailedChecks.Count -eq 0) {
+    Write-Host "Result: PASSED!" -ForegroundColor "green"
+} else {
+    Write-Host "Result: FAILED!" -ForegroundColor "red"
+    Write-Host "Please refer to $Information for more information."
+}
